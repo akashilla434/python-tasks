@@ -1,0 +1,4 @@
+import numpy as np
+sales=[200,300,150,400]
+for value in sales:
+    print(value)

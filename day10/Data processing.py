@@ -1,0 +1,10 @@
+import numpy as np
+arr=np.array([12,7,25,3,18,10])
+sorted_arr=np.sort(arr)
+split_arr=np.array_split(sorted_arr,2)
+sum1=np.sum(split_arr[0])
+sum2=np.sum(split_arr[1])
+print("sorted array:",sorted_arr)
+print("split arrays:",split_arr)
+print("sum of first part:",sum1)
+print("sum of second part:",sum2)
