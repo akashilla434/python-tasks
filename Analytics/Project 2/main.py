@@ -79,7 +79,7 @@ plt.ylabel('Average Score')
 plt.tight_layout()
 plt.savefig('Graph/avg_score_trend.png')
 
-"""
+
 # ===============================================================================
 # 🟡 SCENARIO 3: Filtering + Bar Chart + Save 
 # ================================================================================
@@ -87,16 +87,17 @@ plt.savefig('Graph/avg_score_trend.png')
 #2. Calculate average score per year using Pandas.
 #3. Convert results into NumPy arrays.
 #4. Plot a line graph:
-    ○ X-axis → release_year
-    ○ Y-axis → average score
+    #○ X-axis → release_year
+    #○ Y-axis → average score
 #5. Add:
-    ○ Title: "Average Game Score Over Years"
-    ○ Axis labels
+    #○ Title: "Average Game Score Over Years"
+    #○ Axis labels
 #6. Save the graph: plt.savefig("avg_score_trend.png")
-Filtering + Bar Chart + Save
+#Filtering + Bar Chart + Save
+
 
 # Filtering dataset where score > 7
-filtered_data = data[data['score'] > 7]
+filtered_data = df[df['score'] > 7]
 print("------------------------------------------------------------------------------")
 
 # Count number of high-rated games per platform
@@ -125,8 +126,8 @@ plt.ylabel("Number of Games")
 plt.xticks(rotation=45)
 plt.tight_layout()
 # Save before show
-#plt.savefig("graph/top_platforms_bar.png")
-#plt.show()
+plt.savefig("graph/top_platforms_bar.png")
+plt.show()
 # =============================================================================
 # 🟡 SCENARIO 4: Aggregation + Pie Chart + Save 
 # =============================================================================
@@ -134,11 +135,12 @@ plt.tight_layout()
 #2. Select top 5 genres using Pandas.
 #3. Prepare labels and values.
 #4. Plot a pie chart:
-    ○ Labels → genre
-    ○ Values → count
+    #○ Labels → genre
+    #○ Values → count
 #5. Add percentage labels (autopct).
-Save the graph: plt.savefig("genre_distribution.png")
-  """
+#Save the graph: plt.savefig("genre_distribution.png")
+
+  
 gen_count=df['genre'].value_counts()
 print(gen_count)
 top_5=gen_count.head()
@@ -151,11 +153,15 @@ plt.title('genre_distribution')
 plt.tight_layout()
 plt.savefig("Graph/genre_distribution.png")
 plt.show()
-"""
+
 
 # ================================================================================
 # 🔴 SCENARIO 5: Advanced analysis+multiple graph
 # =================================================================================
+
+
+
+"""
 #You are asked to perform a detailed analysis of review patterns. 
 #part 1: Feature Engineering 
 #1. Create a new column: 
