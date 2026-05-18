@@ -11,6 +11,10 @@ from mongoengine import connect, Document, IntField, StringField, BooleanField
 # 🚀 FastAPI App
 # ------------------------------------------------------------
 app = FastAPI()
+@app.get("/")
+def home():
+    return{"message":"working"}
+
 
 # ------------------------------------------------------------
 # 🌐 MongoDB Atlas Connection
