@@ -3,12 +3,22 @@ from pymongo import MongoClient
 from bson.objectid import ObjectId
 
 app = FastAPI()
+MONGO_URL = "mongodb+srv://akashilla434_db_user:nh4S5xaq45BXIQF5@akash.w5c7o82.mongodb.net/library_db?retryWrites=true&w=majority"
 
+'''
+mongodb+srv://username:password@clustername.xxxxx.mongodb.net/todo_db?retryWrites=true&w=majority
+│              │        │        │                              │
+│              │        │        │                              └── Database name
+│              │        │        └──────────────────────────────── Cluster URL
+│              │        └───────────────────────────────────────── Password
+│              └────────────────────────────────────────────────── Username
+└───────────────────────────────────────────────────────────────── MongoDB protocol
+'''
 # MongoDB Connection
-client = MongoClient("mongodb://localhost:27017")
+client = MongoClient(MONGO_URL)
 
 # Database
-db = client["library"]
+db = client["library_db"]
 
 # Collection
 books = db["books"]
@@ -17,7 +27,7 @@ books = db["books"]
 # Home
 @app.get("/")
 def home():
-    return {"message": "Library Management MongoDB Running"}
+    return {"message": "Library Management Mongo Running"}
 
 
 # Add Book
