@@ -1,8 +1,24 @@
-from fastapi import FastAPI
-from pymongo import MongoClient
-from bson.objectid import ObjectId
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+from mongoengine import (
+    connect,
+    Document,
+    IntField,
+    StringField,
+    FloatField,
+    BooleanField
+)
+
+# ==================================================
+# FASTAPI APP
+# ==================================================
 
 app = FastAPI()
+
+# ==================================================
+# MONGODB CONNECTION
+# ==================================================
 MONGO_URL = "mongodb+srv://akashilla434_db_user:nh4S5xaq45BXIQF5@akash.w5c7o82.mongodb.net/library_db?retryWrites=true&w=majority"
 
 '''
@@ -12,189 +28,203 @@ mongodb+srv://username:password@clustername.xxxxx.mongodb.net/todo_db?retryWrite
 │              │        │        └──────────────────────────────── Cluster URL
 │              │        └───────────────────────────────────────── Password
 │              └────────────────────────────────────────────────── Username
-└───────────────────────────────────────────────────────────────── MongoDB protocol
+└───────────────────────────────────────────────────────────────── MongoDB protocal
 '''
-# MongoDB Connection
-client = MongoClient(MONGO_URL)
+connect(host=MONGO_URL)
 
-# Database
-db = client["library_db"]
+# ==================================================
+# DATABASE MODEL
+# ==================================================
 
-# Collection
-books = db["books"]
+class BookStore(Document):
 
+    id = IntField(primary_key=True)
 
-# Home
+    title = StringField
+
+    category = StringField
+
+    author = StringField
+
+    price = FloatField
+
+    available = BooleanField(default=True)
+
+# ==================================================
+# PYDANTIC MODEL
+# ==================================================
+
+class Book(BaseModel):
+
+    id: int
+    title: str
+    category: str
+    author: str
+    price: float
+    available: bool
+
+# ==================================================
+# HOME API
+# ==================================================
+
 @app.get("/")
 def home():
-    return {"message": "Library Management Mongo Running"}
-
-
-# Add Book
-@app.post("/books")
-def add_book(name: str, author: str, price: int):
-
-    book = {
-        "name": name,
-        "author": author,
-        "price": price,
-        "status": "available"
-    }
-
-    books.insert_one(book)
-
-    return {"message": "Book Added"}
-
-
-# Get All Books
-@app.get("/books")
-def get_books():
-
-    data = []
-
-    for book in books.find():
-
-        data.append({
-            "id": str(book["_id"]),
-            "name": book["name"],
-            "author": book["author"],
-            "price": book["price"],
-            "status": book["status"]
-        })
-
-    return data
-
-
-# Get Book id
-@app.get("/books/{id}")
-def get_book(id: str):
-
-    book = books.find_one({"_id": ObjectId(id)})
-
-    if not book:
-        return {"error": "Book not found"}
 
     return {
-        "id": str(book["_id"]),
-        "name": book["name"],
-        "author": book["author"],
-        "price": book["price"],
-        "status": book["status"]
+        "message": "Library Management Running"
     }
 
+# ==================================================
+# ADD BOOK
+# ==================================================
 
-# Update Book
-@app.put("/books/{id}")
-def update_book(id: str, name: str, author: str, price: int):
+@app.post("/add-book")
+def add_book(book: Book):
 
-    books.update_one(
-        {"_id": ObjectId(id)},
-        {
-            "$set": {
-                "name": name,
-                "author": author,
-                "price": price
-            }
-        }
+    check = BookStore.objects(id=book.id).first()
+
+    if check:
+        raise HTTPException(
+            status_code=400,
+            detail="Book ID already exists"
+        )
+
+    new_book = BookStore(
+        id=book.id,
+        title=book.title,
+        category=book.category,
+        author=book.author,
+        price=book.price,
+        available=book.available
     )
 
-    return {"message": "Book Updated"}
+    new_book.save()
 
+    return {
+        "message": "Book Added Successfully"
+    }
 
-# Delete Book
-@app.delete("/books/{id}")
-def delete_book(id: str):
+# ==================================================
+# GET ALL BOOKS
+# ==================================================
 
-    books.delete_one({"_id": ObjectId(id)})
+@app.get("/all-books")
+def all_books():
 
-    return {"message": "Book Deleted"}
-
-
-# Issue Book
-@app.post("/issue-book/{id}")
-def issue_book(id: str):
-
-    books.update_one(
-        {"_id": ObjectId(id)},
-        {
-            "$set": {
-                "status": "issued"
-            }
-        }
-    )
-
-    return {"message": "Book Issued"}
-
-
-# Return Book
-@app.post("/return-book/{id}")
-def return_book(id: str):
-
-    books.update_one(
-        {"_id": ObjectId(id)},
-        {
-            "$set": {
-                "status": "available"
-            }
-        }
-    )
-
-    return {"message": "Book Returned"}
-
-
-# Available Books
-@app.get("/available-books")
-def available_books():
+    books = BookStore.objects()
 
     data = []
 
-    for book in books.find({"status": "available"}):
+    for book in books:
 
         data.append({
-            "id": str(book["_id"]),
-            "name": book["name"]
+            "id": book.id,
+            "title": book.title,
+            "category": book.category,
+            "author": book.author,
+            "price": book.price,
+            "available": book.available
         })
 
-    return data
+    return {
+        "total_books": len(data),
+        "books": data
+    }
 
+# ==================================================
+# GET SINGLE BOOK
+# ==================================================
 
-# Issued Books
-@app.get("/issued-books")
-def issued_books():
+@app.get("/book/{book_id}")
+def get_book(book_id: int):
 
-    data = []
+    book = BookStore.objects(id=book_id).first()
 
-    for book in books.find({"status": "issued"}):
+    if not book:
+        raise HTTPException(
+            status_code=404,
+            detail="Book not found"
+        )
 
-        data.append({
-            "id": str(book["_id"]),
-            "name": book["name"]
-        })
+    return {
+        "id": book.id,
+        "title": book.title,
+        "category": book.category,
+        "author": book.author,
+        "price": book.price,
+        "available": book.available
+    }
 
-    return data
+# ==================================================
+# UPDATE BOOK
+# ==================================================
 
+@app.put("/update-book/{book_id}")
+def update_book(book_id: int, updated: Book):
 
-#  search Book 
+    book = BookStore.objects(id=book_id).first()
+
+    if not book:
+        raise HTTPException(
+            status_code=404,
+            detail="Book not found"
+        )
+
+    book.title = updated.title
+    book.category = updated.category
+    book.author = updated.author
+    book.price = updated.price
+    book.available = updated.available
+
+    book.save()
+
+    return {
+        "message": "Book Updated Successfully"
+    }
+
+# ==================================================
+# DELETE BOOK
+# ==================================================
+
+@app.delete("/delete-book/{book_id}")
+def delete_book(book_id: int):
+
+    book = BookStore.objects(id=book_id).first()
+
+    if not book:
+        raise HTTPException(
+            status_code=404,
+            detail="Book not found"
+        )
+
+    book.delete()
+
+    return {
+        "message": "Book Deleted Successfully"
+    }
+
+# ==================================================
+# SEARCH BOOK
+# ==================================================
+
 @app.get("/search-book/{title}")
 def search_book(title: str):
 
+    books = BookStore.objects(
+        title__icontains=title
+    )
+
     data = []
 
-    for book in books.find(
-        {
-            "name": {
-                "$regex": title,
-                "$options": "i"
-            }
-        }
-    ):
+    for book in books:
 
         data.append({
-            "id": str(book["_id"]),
-            "name": book["name"],
-            "author": book["author"],
-            "price": book["price"],
-            "status": book["status"]
+            "id": book.id,
+            "title": book.title,
+            "author": book.author
         })
 
-    return data
+    return {
+        "count": len(data),
+        "books": data
+    }
