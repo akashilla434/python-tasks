@@ -1,20 +1,52 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-import mysql.connector
+import sqlite3
 from datetime import datetime
 
 # =====================================================
-# MYSQL CONNECTION
+# SQLITE CONNECTION
 # =====================================================
 
-db = mysql.connector.connect(
-    host="localhost",
-    user="root",
-    password="ROOT",
-    database="library_db"
-)
+conn = sqlite3.connect("library.db", check_same_thread=False)
 
-cursor = db.cursor(dictionary=True)
+cursor = conn.cursor()
+
+# =====================================================
+# CREATE TABLES
+# =====================================================
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS books (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT,
+    author TEXT,
+    price REAL,
+    quantity INTEGER,
+    available BOOLEAN
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS students (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    email TEXT,
+    course TEXT
+)
+""")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS issued_books (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER,
+    book_id INTEGER,
+    issue_date TEXT,
+    return_date TEXT,
+    returned BOOLEAN
+)
+""")
+
+conn.commit()
 
 # =====================================================
 # FASTAPI APP
@@ -27,7 +59,6 @@ app = FastAPI()
 # =====================================================
 
 class Book(BaseModel):
-    id:int
     title: str
     author: str
     price: float
@@ -35,7 +66,6 @@ class Book(BaseModel):
     available: bool
 
 class Student(BaseModel):
-    id:int
     name: str
     email: str
     course: str
@@ -45,12 +75,12 @@ class IssueBook(BaseModel):
     book_id: int
 
 # =====================================================
-# HOME
+# HOME API
 # =====================================================
 
 @app.get("/")
 def home():
-    return {"message": "Library Management System"}
+    return {"message": "Library Management SQLite"}
 
 # =====================================================
 # BOOK APIs
@@ -61,8 +91,9 @@ def home():
 def add_book(book: Book):
 
     query = """
-    INSERT INTO books(title, author, price, quantity, available)
-    VALUES (%s, %s, %s, %s, %s)
+    INSERT INTO books
+    (title, author, price, quantity, available)
+    VALUES (?, ?, ?, ?, ?)
     """
 
     values = (
@@ -74,7 +105,8 @@ def add_book(book: Book):
     )
 
     cursor.execute(query, values)
-    db.commit()
+
+    conn.commit()
 
     return {"message": "Book Added Successfully"}
 
@@ -83,23 +115,47 @@ def add_book(book: Book):
 def get_books():
 
     cursor.execute("SELECT * FROM books")
+
     books = cursor.fetchall()
 
-    return books
+    data = []
+
+    for book in books:
+        data.append({
+            "id": book[0],
+            "title": book[1],
+            "author": book[2],
+            "price": book[3],
+            "quantity": book[4],
+            "available": book[5]
+        })
+
+    return data
 
 # GET BOOK BY ID
 @app.get("/books/{id}")
 def get_book(id: int):
 
-    query = "SELECT * FROM books WHERE id=%s"
+    query = "SELECT * FROM books WHERE id=?"
 
     cursor.execute(query, (id,))
+
     book = cursor.fetchone()
 
     if not book:
-        raise HTTPException(status_code=404, detail="Book Not Found")
+        raise HTTPException(
+            status_code=404,
+            detail="Book Not Found"
+        )
 
-    return book
+    return {
+        "id": book[0],
+        "title": book[1],
+        "author": book[2],
+        "price": book[3],
+        "quantity": book[4],
+        "available": book[5]
+    }
 
 # UPDATE BOOK
 @app.put("/books/{id}")
@@ -107,8 +163,12 @@ def update_book(id: int, book: Book):
 
     query = """
     UPDATE books
-    SET title=%s, author=%s, price=%s, quantity=%s, available=%s
-    WHERE id=%s
+    SET title=?,
+    author=?,
+    price=?,
+    quantity=?,
+    available=?
+    WHERE id=?
     """
 
     values = (
@@ -121,7 +181,8 @@ def update_book(id: int, book: Book):
     )
 
     cursor.execute(query, values)
-    db.commit()
+
+    conn.commit()
 
     return {"message": "Book Updated Successfully"}
 
@@ -129,10 +190,11 @@ def update_book(id: int, book: Book):
 @app.delete("/books/{id}")
 def delete_book(id: int):
 
-    query = "DELETE FROM books WHERE id=%s"
+    query = "DELETE FROM books WHERE id=?"
 
     cursor.execute(query, (id,))
-    db.commit()
+
+    conn.commit()
 
     return {"message": "Book Deleted Successfully"}
 
@@ -145,8 +207,9 @@ def delete_book(id: int):
 def add_student(student: Student):
 
     query = """
-    INSERT INTO students(name, email, course)
-    VALUES (%s, %s, %s)
+    INSERT INTO students
+    (name, email, course)
+    VALUES (?, ?, ?)
     """
 
     values = (
@@ -156,7 +219,8 @@ def add_student(student: Student):
     )
 
     cursor.execute(query, values)
-    db.commit()
+
+    conn.commit()
 
     return {"message": "Student Added Successfully"}
 
@@ -165,9 +229,20 @@ def add_student(student: Student):
 def get_students():
 
     cursor.execute("SELECT * FROM students")
+
     students = cursor.fetchall()
 
-    return students
+    data = []
+
+    for student in students:
+        data.append({
+            "id": student[0],
+            "name": student[1],
+            "email": student[2],
+            "course": student[3]
+        })
+
+    return data
 
 # =====================================================
 # ISSUE BOOK
@@ -176,32 +251,16 @@ def get_students():
 @app.post("/issue-book")
 def issue_book(issue: IssueBook):
 
-    # check book exists
-    cursor.execute(
-        "SELECT * FROM books WHERE id=%s",
-        (issue.book_id,)
-    )
-
-    book = cursor.fetchone()
-
-    if not book:
-        raise HTTPException(status_code=404, detail="Book Not Found")
-
-    # insert issued book
     query = """
-    INSERT INTO issued_books(
-        student_id,
-        book_id,
-        issue_date,
-        returned
-    )
-    VALUES (%s, %s, %s, %s)
+    INSERT INTO issued_books
+    (student_id, book_id, issue_date, returned)
+    VALUES (?, ?, ?, ?)
     """
 
     values = (
         issue.student_id,
         issue.book_id,
-        datetime.now(),
+        str(datetime.now()),
         False
     )
 
@@ -209,11 +268,11 @@ def issue_book(issue: IssueBook):
 
     # update available false
     cursor.execute(
-        "UPDATE books SET available=%s WHERE id=%s",
+        "UPDATE books SET available=? WHERE id=?",
         (False, issue.book_id)
     )
 
-    db.commit()
+    conn.commit()
 
     return {"message": "Book Issued Successfully"}
 
@@ -224,16 +283,17 @@ def issue_book(issue: IssueBook):
 @app.post("/return-book/{id}")
 def return_book(id: int):
 
+    # update issued book
     query = """
     UPDATE issued_books
-    SET returned=%s,
-    return_date=%s
-    WHERE id=%s
+    SET returned=?,
+    return_date=?
+    WHERE id=?
     """
 
     values = (
         True,
-        datetime.now(),
+        str(datetime.now()),
         id
     )
 
@@ -241,21 +301,22 @@ def return_book(id: int):
 
     # get book id
     cursor.execute(
-        "SELECT book_id FROM issued_books WHERE id=%s",
+        "SELECT book_id FROM issued_books WHERE id=?",
         (id,)
     )
 
     data = cursor.fetchone()
 
     if data:
-        book_id = data["book_id"]
+
+        book_id = data[0]
 
         cursor.execute(
-            "UPDATE books SET available=%s WHERE id=%s",
+            "UPDATE books SET available=? WHERE id=?",
             (True, book_id)
         )
 
-    db.commit()
+    conn.commit()
 
     return {"message": "Book Returned Successfully"}
 
@@ -267,12 +328,22 @@ def return_book(id: int):
 def available_books():
 
     cursor.execute(
-        "SELECT * FROM books WHERE available=True"
+        "SELECT * FROM books WHERE available=1"
     )
 
     books = cursor.fetchall()
 
-    return books
+    data = []
+
+    for book in books:
+        data.append({
+            "id": book[0],
+            "title": book[1],
+            "author": book[2],
+            "price": book[3]
+        })
+
+    return data
 
 # =====================================================
 # ISSUED BOOKS
@@ -287,7 +358,19 @@ def issued_books():
 
     books = cursor.fetchall()
 
-    return books
+    data = []
+
+    for book in books:
+        data.append({
+            "id": book[0],
+            "student_id": book[1],
+            "book_id": book[2],
+            "issue_date": book[3],
+            "return_date": book[4],
+            "returned": book[5]
+        })
+
+    return data
 
 # =====================================================
 # SEARCH BOOK
@@ -298,11 +381,21 @@ def search_book(title: str):
 
     query = """
     SELECT * FROM books
-    WHERE title LIKE %s
+    WHERE title LIKE ?
     """
 
-    cursor.execute(query, (f"%{title}%",))
+    cursor.execute(query, ('%' + title + '%',))
 
     books = cursor.fetchall()
 
-    return books
+    data = []
+
+    for book in books:
+        data.append({
+            "id": book[0],
+            "title": book[1],
+            "author": book[2],
+            "price": book[3]
+        })
+
+    return data

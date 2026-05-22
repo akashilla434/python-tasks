@@ -1,14 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-
-from mongoengine import (
-    connect,
-    Document,
-    IntField,
-    StringField,
-    FloatField,
-    BooleanField
-)
+from mongoengine import *
+from datetime import datetime
 
 # ==================================================
 # FASTAPI APP
@@ -19,6 +12,7 @@ app = FastAPI()
 # ==================================================
 # MONGODB CONNECTION
 # ==================================================
+
 MONGO_URL = "mongodb+srv://akashilla434_db_user:nh4S5xaq45BXIQF5@akash.w5c7o82.mongodb.net/library_db?retryWrites=true&w=majority"
 
 '''
@@ -31,37 +25,53 @@ mongodb+srv://username:password@clustername.xxxxx.mongodb.net/todo_db?retryWrite
 └───────────────────────────────────────────────────────────────── MongoDB protocal
 '''
 connect(host=MONGO_URL)
-
 # ==================================================
-# DATABASE MODEL
+# MONGODB COLLECTIONS
 # ==================================================
 
-class BookStore(Document):
-
-    id = IntField(primary_key=True)
-
-    title = StringField
-
-    category = StringField
-
-    author = StringField
-
-    price = FloatField
-
+# BOOKS COLLECTION
+class Book(Document):
+    title = StringField(required=True)
+    author = StringField()
+    price = FloatField()
+    quantity = IntField()
     available = BooleanField(default=True)
 
+# STUDENTS COLLECTION
+class Student(Document):
+    name = StringField()
+    email = StringField()
+    course = StringField()
+
+# ISSUED BOOKS COLLECTION
+class IssuedBook(Document):
+    student_id = StringField()
+    book_id = StringField()
+
+    issue_date = DateTimeField(default=datetime.utcnow)
+    return_date = DateTimeField()
+
+    returned = BooleanField(default=False)
+
 # ==================================================
-# PYDANTIC MODEL
+# Pydantic Models
 # ==================================================
 
-class Book(BaseModel):
-
-    id: int
+class BookSchema(BaseModel):
     title: str
-    category: str
     author: str
     price: float
+    quantity: int
     available: bool
+
+class StudentSchema(BaseModel):
+    name: str
+    email: str
+    course: str
+
+class IssueSchema(BaseModel):
+    student_id: str
+    book_id: str
 
 # ==================================================
 # HOME API
@@ -69,139 +79,250 @@ class Book(BaseModel):
 
 @app.get("/")
 def home():
-
-    return {
-        "message": "Library Management Running"
-    }
+    return {"message": "Library Management System MongoDB"}
 
 # ==================================================
+# BOOK APIs
+# ==================================================
+
 # ADD BOOK
-# ==================================================
+@app.post("/books")
+def add_book(book: BookSchema):
 
-@app.post("/add-book")
-def add_book(book: Book):
-
-    check = BookStore.objects(id=book.id).first()
-
-    if check:
-        raise HTTPException(
-            status_code=400,
-            detail="Book ID already exists"
-        )
-
-    new_book = BookStore(
-        id=book.id,
+    new_book = Book(
         title=book.title,
-        category=book.category,
         author=book.author,
         price=book.price,
+        quantity=book.quantity,
         available=book.available
     )
 
     new_book.save()
 
-    return {
-        "message": "Book Added Successfully"
-    }
+    return {"message": "Book Added Successfully"}
 
-# ==================================================
 # GET ALL BOOKS
-# ==================================================
+@app.get("/books")
+def get_books():
 
-@app.get("/all-books")
-def all_books():
-
-    books = BookStore.objects()
+    books = Book.objects()
 
     data = []
 
     for book in books:
-
         data.append({
-            "id": book.id,
+            "id": str(book.id),
             "title": book.title,
-            "category": book.category,
             "author": book.author,
             "price": book.price,
+            "quantity": book.quantity,
             "available": book.available
         })
 
-    return {
-        "total_books": len(data),
-        "books": data
-    }
+    return data
 
-# ==================================================
-# GET SINGLE BOOK
-# ==================================================
+# GET BOOK BY ID
+@app.get("/books/{id}")
+def get_book(id: str):
 
-@app.get("/book/{book_id}")
-def get_book(book_id: int):
+    try:
+        book = Book.objects.get(id=id)
 
-    book = BookStore.objects(id=book_id).first()
+        return {
+            "id": str(book.id),
+            "title": book.title,
+            "author": book.author,
+            "price": book.price,
+            "quantity": book.quantity,
+            "available": book.available
+        }
 
-    if not book:
+    except:
         raise HTTPException(
             status_code=404,
-            detail="Book not found"
+            detail="Book Not Found"
         )
 
-    return {
-        "id": book.id,
-        "title": book.title,
-        "category": book.category,
-        "author": book.author,
-        "price": book.price,
-        "available": book.available
-    }
-
-# ==================================================
 # UPDATE BOOK
-# ==================================================
+@app.put("/books/{id}")
+def update_book(id: str, book: BookSchema):
 
-@app.put("/update-book/{book_id}")
-def update_book(book_id: int, updated: Book):
+    try:
+        update_book = Book.objects.get(id=id)
 
-    book = BookStore.objects(id=book_id).first()
+        update_book.title = book.title
+        update_book.author = book.author
+        update_book.price = book.price
+        update_book.quantity = book.quantity
+        update_book.available = book.available
 
-    if not book:
+        update_book.save()
+
+        return {"message": "Book Updated Successfully"}
+
+    except:
         raise HTTPException(
             status_code=404,
-            detail="Book not found"
+            detail="Book Not Found"
         )
 
-    book.title = updated.title
-    book.category = updated.category
-    book.author = updated.author
-    book.price = updated.price
-    book.available = updated.available
-
-    book.save()
-
-    return {
-        "message": "Book Updated Successfully"
-    }
-
-# ==================================================
 # DELETE BOOK
-# ==================================================
+@app.delete("/books/{id}")
+def delete_book(id: str):
 
-@app.delete("/delete-book/{book_id}")
-def delete_book(book_id: int):
+    try:
+        book = Book.objects.get(id=id)
 
-    book = BookStore.objects(id=book_id).first()
+        book.delete()
 
-    if not book:
+        return {"message": "Book Deleted Successfully"}
+
+    except:
         raise HTTPException(
             status_code=404,
-            detail="Book not found"
+            detail="Book Not Found"
         )
 
-    book.delete()
+# ==================================================
+# STUDENT APIs
+# ==================================================
 
-    return {
-        "message": "Book Deleted Successfully"
-    }
+# ADD STUDENT
+@app.post("/students")
+def add_student(student: StudentSchema):
+
+    new_student = Student(
+        name=student.name,
+        email=student.email,
+        course=student.course
+    )
+
+    new_student.save()
+
+    return {"message": "Student Added Successfully"}
+
+# GET ALL STUDENTS
+@app.get("/students")
+def get_students():
+
+    students = Student.objects()
+
+    data = []
+
+    for student in students:
+        data.append({
+            "id": str(student.id),
+            "name": student.name,
+            "email": student.email,
+            "course": student.course
+        })
+
+    return data
+
+# ==================================================
+# ISSUE BOOK
+# ==================================================
+
+@app.post("/issue-book")
+def issue_book(issue: IssueSchema):
+
+    try:
+        book = Book.objects.get(id=issue.book_id)
+
+        issued = IssuedBook(
+            student_id=issue.student_id,
+            book_id=issue.book_id,
+            issue_date=datetime.utcnow(),
+            returned=False
+        )
+
+        issued.save()
+
+        # book unavailable
+        book.available = False
+        book.save()
+
+        return {"message": "Book Issued Successfully"}
+
+    except:
+        raise HTTPException(
+            status_code=404,
+            detail="Book Not Found"
+        )
+
+# ==================================================
+# RETURN BOOK
+# ==================================================
+
+@app.post("/return-book/{id}")
+def return_book(id: str):
+
+    try:
+        issued = IssuedBook.objects.get(id=id)
+
+        issued.returned = True
+        issued.return_date = datetime.utcnow()
+
+        issued.save()
+
+        # make book available again
+        book = Book.objects.get(id=issued.book_id)
+
+        book.available = True
+        book.save()
+
+        return {"message": "Book Returned Successfully"}
+
+    except:
+        raise HTTPException(
+            status_code=404,
+            detail="Issued Book Not Found"
+        )
+
+# ==================================================
+# AVAILABLE BOOKS
+# ==================================================
+
+@app.get("/available-books")
+def available_books():
+
+    books = Book.objects(available=True)
+
+    data = []
+
+    for book in books:
+        data.append({
+            "id": str(book.id),
+            "title": book.title,
+            "author": book.author,
+            "price": book.price,
+            "quantity": book.quantity
+        })
+
+    return data
+
+# ==================================================
+# ISSUED BOOKS
+# ==================================================
+
+@app.get("/issued-books")
+def issued_books():
+
+    issued = IssuedBook.objects()
+
+    data = []
+
+    for book in issued:
+        data.append({
+            "id": str(book.id),
+            "student_id": book.student_id,
+            "book_id": book.book_id,
+            "issue_date": book.issue_date,
+            "return_date": book.return_date,
+            "returned": book.returned
+        })
+
+    return data
 
 # ==================================================
 # SEARCH BOOK
@@ -210,21 +331,16 @@ def delete_book(book_id: int):
 @app.get("/search-book/{title}")
 def search_book(title: str):
 
-    books = BookStore.objects(
-        title__icontains=title
-    )
+    books = Book.objects(title__icontains=title)
 
     data = []
 
     for book in books:
-
         data.append({
-            "id": book.id,
+            "id": str(book.id),
             "title": book.title,
-            "author": book.author
+            "author": book.author,
+            "price": book.price
         })
 
-    return {
-        "count": len(data),
-        "books": data
-    }
+    return data
