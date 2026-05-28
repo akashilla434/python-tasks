@@ -1,507 +1,333 @@
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from flask import Flask, render_template, request, redirect, session, send_file
 import mysql.connector
-from datetime import datetime
-import uvicorn
+from datetime import date
+import qrcode
+import os
 
-# =====================================================
-# MYSQL CONNECTION
-# =====================================================
+app = Flask(__name__)
+app.secret_key = "library123"
+
+# ================= DATABASE =================
 
 db = mysql.connector.connect(
     host="localhost",
     user="root",
     password="ROOT",
-    database="library_db"
+    database="library_management"
 )
 
-cursor = db.cursor(dictionary=True)
+cursor = db.cursor()
 
-# =====================================================
-# FASTAPI APP
-# =====================================================
+# ================= LOGIN =================
 
-app = FastAPI()
+@app.route("/", methods=["GET", "POST"])
+def login():
 
-# =====================================================
-# PYDANTIC MODELS
-# =====================================================
+    if request.method == "POST":
 
-class Book(BaseModel):
-    id: int
-    title: str
-    author: str
-    price: float
-    quantity: int
-    available: bool
+        email = request.form.get("email")
+        password = request.form.get("password")
 
-class Student(BaseModel):
-    id: int
-    name: str
-    email: str
-    course: str
-
-class IssueBook(BaseModel):
-    student_id: int
-    book_id: int
-
-# =====================================================
-# HOME PAGE
-# =====================================================
-
-@app.get("/", response_class=HTMLResponse)
-def home():
-
-    cursor.execute("SELECT * FROM books")
-    books = cursor.fetchall()
-
-    html = """
-
-    <html>
-
-    <head>
-
-        <title>Library Management System</title>
-
-        <style>
-
-            body{
-                font-family: Arial;
-                margin: 40px;
-                background-color: #f2f2f2;
-            }
-
-            h1{
-                color: darkblue;
-            }
-
-            table{
-                border-collapse: collapse;
-                width: 100%;
-                background-color: white;
-            }
-
-            th, td{
-                border: 1px solid black;
-                padding: 10px;
-                text-align: center;
-            }
-
-            th{
-                background-color: lightgray;
-            }
-
-            input{
-                padding: 10px;
-                margin: 5px;
-            }
-
-            button{
-                padding: 10px 15px;
-                background-color: blue;
-                color: white;
-                border: none;
-                cursor: pointer;
-            }
-
-        </style>
-
-    </head>
-
-    <body>
-
-        <h1>Library Management System</h1>
-
-        <h2>Add Book</h2>
-
-        <form action="/add-book" method="post">
-
-            <input type="number" name="id" placeholder="ID" required>
-
-            <input type="text" name="title" placeholder="Title" required>
-
-            <input type="text" name="author" placeholder="Author" required>
-
-            <input type="number" step="0.01" name="price" placeholder="Price" required>
-
-            <input type="number" name="quantity" placeholder="Quantity" required>
-
-            <button type="submit">Add Book</button>
-
-        </form>
-
-        <hr>
-
-        <h2>Books List</h2>
-
-        <table>
-
-            <tr>
-
-                <th>ID</th>
-                <th>Title</th>
-                <th>Author</th>
-                <th>Price</th>
-                <th>Quantity</th>
-                <th>Available</th>
-
-            </tr>
-
-    """
-
-    for book in books:
-
-        html += f"""
-
-        <tr>
-
-            <td>{book['id']}</td>
-            <td>{book['title']}</td>
-            <td>{book['author']}</td>
-            <td>{book['price']}</td>
-            <td>{book['quantity']}</td>
-            <td>{book['available']}</td>
-
-        </tr>
-
-        """
-
-    html += """
-
-        </table>
-
-    </body>
-
-    </html>
-
-    """
-
-    return html
-
-# =====================================================
-# ADD BOOK FROM WEB PAGE
-# =====================================================
-
-@app.post("/add-book")
-async def add_book_form(request: Request):
-
-    try:
-
-        form = await request.form()
-
-        query = """
-        INSERT INTO books(
-            id,
-            title,
-            author,
-            price,
-            quantity,
-            available
-        )
-        VALUES (%s, %s, %s, %s, %s, %s)
-        """
-
-        values = (
-            int(form["id"]),
-            form["title"],
-            form["author"],
-            float(form["price"]),
-            int(form["quantity"]),
-            1
+        cursor.execute(
+            "SELECT * FROM students WHERE email=%s AND password=%s",
+            (email, password)
         )
 
-        cursor.execute(query, values)
+        user = cursor.fetchone()
 
-        db.commit()
+        if user:
+            session["user"] = user[1]
+            session["id"] = user[0]
 
-        return HTMLResponse(
-            """
-            <h2>Book Added Successfully</h2>
-            <a href="/">Go Back</a>
-            """
+            return redirect("/dashboard")
+
+        return render_template(
+            "login.html",
+            error="Invalid Email or Password"
         )
 
-    except Exception as e:
+    return render_template("login.html")
 
-        return HTMLResponse(
-            f"""
-            <h2>Error:</h2>
-            <p>{e}</p>
-            <a href="/">Go Back</a>
-            """
-        )
 
-# =====================================================
-# GET ALL BOOKS
-# =====================================================
+# ================= DASHBOARD =================
 
-@app.get("/books")
-def get_books():
+@app.route("/dashboard")
+def dashboard():
 
-    cursor.execute("SELECT * FROM books")
+    if "user" not in session:
+        return redirect("/")
 
-    books = cursor.fetchall()
-
-    return books
-
-# =====================================================
-# GET BOOK BY ID
-# =====================================================
-
-@app.get("/books/{id}")
-def get_book(id: int):
-
-    query = "SELECT * FROM books WHERE id=%s"
-
-    cursor.execute(query, (id,))
-
-    book = cursor.fetchone()
-
-    if not book:
-
-        raise HTTPException(
-            status_code=404,
-            detail="Book Not Found"
-        )
-
-    return book
-
-# =====================================================
-# UPDATE BOOK
-# =====================================================
-
-@app.put("/books/{id}")
-def update_book(id: int, book: Book):
-
-    query = """
-    UPDATE books
-    SET title=%s,
-        author=%s,
-        price=%s,
-        quantity=%s,
-        available=%s
-    WHERE id=%s
-    """
-
-    values = (
-        book.title,
-        book.author,
-        book.price,
-        book.quantity,
-        book.available,
-        id
+    return render_template(
+        "dashboard.html",
+        user=session["user"]
     )
 
-    cursor.execute(query, values)
 
-    db.commit()
+# ================= BOOKS =================
 
-    return {"message": "Book Updated Successfully"}
+@app.route("/books")
+def books():
 
-# =====================================================
-# DELETE BOOK
-# =====================================================
+    if "user" not in session:
+        return redirect("/")
 
-@app.delete("/books/{id}")
-def delete_book(id: int):
+    search = request.args.get("search")
 
-    query = "DELETE FROM books WHERE id=%s"
+    if search:
 
-    cursor.execute(query, (id,))
+        cursor.execute("""
+            SELECT * FROM books
+            WHERE title LIKE %s
+            OR author LIKE %s
+        """, ("%" + search + "%", "%" + search + "%"))
 
-    db.commit()
+    else:
 
-    return {"message": "Book Deleted Successfully"}
+        cursor.execute("SELECT * FROM books")
 
-# =====================================================
-# ADD STUDENT
-# =====================================================
+    data = cursor.fetchall()
 
-@app.post("/students")
-def add_student(student: Student):
-
-    query = """
-    INSERT INTO students(name, email, course)
-    VALUES (%s, %s, %s)
-    """
-
-    values = (
-        student.name,
-        student.email,
-        student.course
+    return render_template(
+        "books.html",
+        books=data
     )
 
-    cursor.execute(query, values)
+
+# ================= ADD BOOK =================
+
+@app.route("/add_book", methods=["POST"])
+def add_book():
+
+    if "user" not in session:
+        return redirect("/")
+
+    title = request.form.get("title")
+    author = request.form.get("author")
+    price = request.form.get("price")
+    quantity = request.form.get("quantity")
+
+    cursor.execute("""
+        INSERT INTO books
+        (title, author, price, quantity, available)
+        VALUES(%s,%s,%s,%s,%s)
+    """, (title, author, price, quantity, quantity))
 
     db.commit()
 
-    return {"message": "Student Added Successfully"}
+    return redirect("/books")
 
-# =====================================================
-# GET STUDENTS
-# =====================================================
 
-@app.get("/students")
-def get_students():
+# ================= ISSUE BOOK =================
 
-    cursor.execute("SELECT * FROM students")
+@app.route("/issue/<int:id>")
+def issue(id):
 
-    students = cursor.fetchall()
+    if "user" not in session:
+        return redirect("/")
 
-    return students
-
-# =====================================================
-# ISSUE BOOK
-# =====================================================
-
-@app.post("/issue-book")
-def issue_book(issue: IssueBook):
+    today = date.today()
+    student_id = session["id"]
 
     cursor.execute(
-        "SELECT * FROM books WHERE id=%s",
-        (issue.book_id,)
-    )
-
-    book = cursor.fetchone()
-
-    if not book:
-
-        raise HTTPException(
-            status_code=404,
-            detail="Book Not Found"
-        )
-
-    query = """
-    INSERT INTO issued_books(
-        student_id,
-        book_id,
-        issue_date,
-        returned
-    )
-    VALUES (%s, %s, %s, %s)
-    """
-
-    values = (
-        issue.student_id,
-        issue.book_id,
-        datetime.now(),
-        False
-    )
-
-    cursor.execute(query, values)
-
-    cursor.execute(
-        "UPDATE books SET available=%s WHERE id=%s",
-        (False, issue.book_id)
-    )
-
-    db.commit()
-
-    return {"message": "Book Issued Successfully"}
-
-# =====================================================
-# RETURN BOOK
-# =====================================================
-
-@app.post("/return-book/{id}")
-def return_book(id: int):
-
-    query = """
-    UPDATE issued_books
-    SET returned=%s,
-        return_date=%s
-    WHERE id=%s
-    """
-
-    values = (
-        True,
-        datetime.now(),
-        id
-    )
-
-    cursor.execute(query, values)
-
-    cursor.execute(
-        "SELECT book_id FROM issued_books WHERE id=%s",
+        "SELECT available FROM books WHERE id=%s",
         (id,)
     )
 
-    data = cursor.fetchone()
+    result = cursor.fetchone()
 
-    if data:
+    if result and result[0] > 0:
 
-        book_id = data["book_id"]
+        cursor.execute("""
+            UPDATE books
+            SET available = available - 1
+            WHERE id=%s
+        """, (id,))
 
-        cursor.execute(
-            "UPDATE books SET available=%s WHERE id=%s",
-            (True, book_id)
-        )
+        cursor.execute("""
+            INSERT INTO transactions
+            (book_id, student_id, issue_date)
+            VALUES(%s,%s,%s)
+        """, (id, student_id, today))
+
+        db.commit()
+
+    return redirect("/books")
+
+
+# ================= RETURN BOOK =================
+
+@app.route("/return/<int:id>")
+def return_book(id):
+
+    if "user" not in session:
+        return redirect("/")
+
+    today = date.today()
+
+    cursor.execute("""
+        SELECT issue_date
+        FROM transactions
+        WHERE book_id=%s
+        ORDER BY id DESC
+        LIMIT 1
+    """, (id,))
+
+    result = cursor.fetchone()
+
+    fine = 0
+
+    if result:
+
+        issue_date = result[0]
+
+        days = (today - issue_date).days
+
+        if days > 7:
+            fine = (days - 7) * 10
+
+    cursor.execute("""
+        UPDATE books
+        SET available = available + 1
+        WHERE id=%s
+    """, (id,))
+
+    cursor.execute("""
+        UPDATE transactions
+        SET return_date=%s,
+            fine=%s
+        WHERE book_id=%s
+        ORDER BY id DESC
+        LIMIT 1
+    """, (today, fine, id))
 
     db.commit()
 
-    return {"message": "Book Returned Successfully"}
+    return redirect("/books")
 
-# =====================================================
-# AVAILABLE BOOKS
-# =====================================================
 
-@app.get("/available-books")
-def available_books():
+# ================= QR CODE =================
 
-    cursor.execute(
-        "SELECT * FROM books WHERE available=True"
-    )
+@app.route("/qr/<int:id>")
+def qr(id):
 
-    books = cursor.fetchall()
+    if "user" not in session:
+        return redirect("/")
 
-    return books
+    if not os.path.exists("static"):
+        os.makedirs("static")
 
-# =====================================================
-# ISSUED BOOKS
-# =====================================================
+    img = qrcode.make(f"BOOK ID : {id}")
 
-@app.get("/issued-books")
-def issued_books():
+    path = f"static/qr_{id}.png"
 
-    cursor.execute(
-        "SELECT * FROM issued_books"
-    )
+    img.save(path)
 
-    books = cursor.fetchall()
+    return send_file(path, mimetype="image/png")
 
-    return books
 
-# =====================================================
-# SEARCH BOOK
-# =====================================================
+# ================= DELETE BOOK =================
 
-@app.get("/search-book/{title}")
-def search_book(title: str):
+@app.route("/delete/<int:id>")
+def delete(id):
 
-    query = """
-    SELECT * FROM books
-    WHERE title LIKE %s
-    """
+    if "user" not in session:
+        return redirect("/")
 
     cursor.execute(
-        query,
-        (f"%{title}%",)
+        "DELETE FROM books WHERE id=%s",
+        (id,)
     )
 
-    books = cursor.fetchall()
+    db.commit()
 
-    return books
+    return redirect("/books")
 
-# =====================================================
-# SERVER RUN
-# =====================================================
+
+# ================= STUDENTS =================
+
+@app.route("/students")
+def students():
+
+    if "user" not in session:
+        return redirect("/")
+
+    cursor.execute("SELECT * FROM students")
+
+    data = cursor.fetchall()
+
+    return render_template(
+        "students.html",
+        students=data
+    )
+# ================= ADD STUDENT =================
+
+@app.route("/add_student", methods=["POST"])
+def add_student():
+
+    if "user" not in session:
+        return redirect("/")
+
+    name = request.form.get("name")
+    email = request.form.get("email")
+    password = request.form.get("password")
+    department = request.form.get("department")
+    student_year = request.form.get("year")
+
+    cursor.execute("""
+        INSERT INTO students
+        (name, email, password, department, student_year)
+        VALUES(%s,%s,%s,%s,%s)
+    """, (name, email, password, department, student_year))
+
+    db.commit()
+
+    return redirect("/students")
+    
+# ================= REPORTS =================
+
+@app.route("/reports")
+def reports():
+
+    if "user" not in session:
+        return redirect("/")
+
+    cursor.execute("""
+        SELECT books.title,
+               students.name,
+               transactions.issue_date,
+               transactions.return_date,
+               transactions.fine
+        FROM transactions
+        JOIN books
+        ON books.id = transactions.book_id
+        JOIN students
+        ON students.id = transactions.student_id
+    """)
+
+    data = cursor.fetchall()
+
+    return render_template(
+        "reports.html",
+        reports=data
+    )
+
+
+# ================= LOGOUT =================
+
+@app.route("/logout")
+def logout():
+
+    session.clear()
+
+    return redirect("/")
+
+
+# ================= SERVER =================
 
 if __name__ == "__main__":
 
-    uvicorn.run(
-        "app:app",
-        host="127.0.0.1",
+    app.run(
+        host="0.0.0.0",
         port=5000,
-        reload=True
+        debug=True
     )
