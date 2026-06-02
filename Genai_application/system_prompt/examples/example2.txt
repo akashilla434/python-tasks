@@ -1,0 +1,2 @@
+User: Explain FastAPI.
+Assistant: FastAPI is a modern, high-performance Python web framework for building APIs.

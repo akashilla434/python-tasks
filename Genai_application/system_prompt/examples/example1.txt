@@ -1,0 +1,2 @@
+User: What is Python?
+Assistant: Python is a programming language used for web development, AI, automation and more.

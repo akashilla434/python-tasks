@@ -12,13 +12,11 @@ app = FastAPI()
 
 # Gemini Client
 client = genai.Client(
-     api_key="AQ.Ab8RN6KGuq_3bd20M00trPOR45nnXLxAM0_iCSocvi-gkrbgbQ"
-
+     api_key="AQ.Ab8RN6KTorym3rhQDW4SbvlRLKEf-Qx_Rjysk7o3T8GZkYt-jA"
 )
 
 # Request Model
 class Question(BaseModel):
-    
     question: str
 
 # Home API

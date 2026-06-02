@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gemini AI Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+
+    <div class="sidebar">
+        <h2>🤖 Gemini AI</h2>
+
+        <button class="new-chat">+ New Chat</button>
+
+        <ul>
+            <li>🕒 History</li>
+            <li>📊 Analytics</li>
+            <li>⚙️ Settings</li>
+            <li>ℹ️ About</li>
+        </ul>
+    </div>
+
+    <div class="main">
+
+        <div class="welcome">
+            <h1>👋 Welcome to Gemini AI</h1>
+            <p>Your intelligent assistant powered by Gemini</p>
+        </div>
+
+        <div class="search-box">
+            <input type="text" placeholder="Ask Anything...">
+            <button>🚀 Ask</button>
+        </div>
+
+        <div class="cards">
+            <div class="card">
+                <h3>⚡ Model</h3>
+                <p>Gemini 2.5 Flash</p>
+            </div>
+
+            <div class="card">
+                <h3>💬 Chat</h3>
+                <p>AI Assistant</p>
+            </div>
+
+            <div class="card">
+                <h3>📊 Analytics</h3>
+                <p>Enabled</p>
+            </div>
+
+            <div class="card">
+                <h3>📁 History</h3>
+                <p>Stored</p>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+</body>
+</html>
